@@ -100,6 +100,11 @@
   .chip.locked{cursor:default}
   .chip .tag{position:absolute;top:-8px;left:-6px;font-size:12px;font-weight:700;color:#fff;background:var(--c);border-radius:9px;padding:0 7px;line-height:18px}
   .chip.miss{outline:3px solid var(--bordo);outline-offset:1px}
+  .chip.peek{outline:3px solid var(--green);outline-offset:1px;background:#eef7f0;color:var(--blue)}
+  .chip.peek .msg{text-decoration:none}
+  .chip:disabled:not(.placed){color:var(--blue);cursor:default}
+  td.fq .ph{color:#cbc5b6}
+  table.freq td.fq.c-active{box-shadow:inset 0 0 0 3px var(--mustard)}
   .chip.dragging{opacity:.35}
   .ghost{position:fixed;z-index:50;pointer-events:none;cursor:grabbing;box-shadow:0 8px 20px rgba(23,54,94,.25);transform:rotate(-3deg)}
   body.is-dragging, body.is-dragging *{cursor:grabbing!important}
@@ -261,6 +266,7 @@
     <div class="actions">
       <button class="btn" id="checkBtn" type="button">בדיקה</button>
       <button class="hint-btn" id="hintBtn" type="button" aria-pressed="false"><img data-asset="icons.hint" alt="">רמז</button>
+      <button class="btn secondary" id="aidBtn" type="button" hidden>מיון ההודעות לטבלה</button>
       <span class="spacer"></span>
       <button class="btn" id="nextBtn" type="button" hidden><span id="nextLabel">המשך</span><img data-asset="icons.next" alt=""></button>
     </div>
@@ -303,9 +309,11 @@
   <h2 id="helpTitle">איך משחקים?</h2>
   <p>טבלת ההזמנות של המסיבה נעלמה. יש ארבע דלתות, ורק פתרון נכון פותח את הדלת הבאה.</p>
   <ul>
-    <li><b>מיון הודעות:</b> גררו הודעה מהקבוצה לעמודה המתאימה בטבלה. אפשר גם ללחוץ על ההודעה ואחר כך על העמודה. כדי להחזיר הודעה, לחצו עליה שוב.</li>
+    <li><b>ספירה:</b> בדלת הראשונה סופרים בעצמכם כמה תלמידים ביקשו כל תוספת, ומקלידים את השכיחות של כל תוספת. אם המספרים לא נכונים (או אחרי רמז), אפשר להיעזר במיון ההודעות לטבלה.</li>
+    <li><b>מיון הודעות:</b> גררו הודעה מהקבוצה לעמודה המתאימה בטבלה, או לחצו על ההודעה ואחר כך על העמודה.</li>
+    <li><b>תיקון מיון:</b> הודעה שהכנסתם לעמודה לא נכונה – גררו אותה לעמודה אחרת. לחיצה על עמודה בטבלה מסמנת את ההודעות שנמצאות בה. לחיצה על הודעה ואז לחיצה נוספת עליה מחזירה אותה לקבוצה.</li>
     <li><b>סימני ספירה ושכיחות:</b> כל הודעה מוסיפה קו ומעלה את השכיחות ב־<span class="num">1</span>. כל חמישה קווים נסגרים בקו אלכסוני.</li>
-    <li><b>מנעולים:</b> את הקוד מקלידים במקלדת שעל המנעול או במקלדת של המחשב. שימו לב לסדר התוספות שעל המנעול: הוא לא תמיד כמו בטבלה.</li>
+    <li><b>מנעולים:</b> את הקוד מקלידים במקלדת שעל המנעול או במקלדת של המחשב.</li>
     <li><b>פתקים:</b> אחרי כל אחת משלוש הדלתות הראשונות מקבלים פתק. הפתקים מסבירים איך בונים את קוד היציאה בדלת האחרונה.</li>
     <li><b>שכיח:</b> התוספת שהופיעה הכי הרבה פעמים.</li>
     <li><img class="ico" data-asset="icons.star" alt=""> <b>כוכבים:</b> דלת שפותחים בבדיקה הראשונה ובלי רמז נותנת כוכב. אפשר לאסוף עד 4.</li>
@@ -424,8 +432,7 @@ const ASSET_DECISIONS = [
       const items=[]; let id=0;
       shuffle(f.flatMap((c,i)=>Array(c).fill(i))).forEach(t=>items.push({id:id++, name:names.pop(), t, msg:pick(PHRASES)(TOPS[t].name), late:false}));
       shuffle(late.slice()).forEach(t=>items.push({id:id++, name:names.pop(), t, msg:pick(PHRASES)(TOPS[t].name), late:true}));
-      const lockOrder=(()=>{ const base=[...Array(L.t).keys()]; let o; do{ o=shuffle(base.slice()); }while(o.every((v,i)=>v===i)); return o; })();
-      return { f, f2, k, n0:L.n, N:L.n+k, mode:m, mode2:argmax(f2), items, t:L.t, lockOrder, maxF:L.maxF,
+            return { f, f2, k, n0:L.n, N:L.n+k, mode:m, mode2:argmax(f2), items, t:L.t, maxF:L.maxF,
                exit:[L.t, f2[argmax(f2)], k] };
     }
     throw new Error('generation failed');
@@ -439,7 +446,8 @@ const ASSET_DECISIONS = [
     const D=genData(level);
     S={ D, room:0, step:'a', place:{}, totalShown:null, selected:null,
         failed:Array(ROOMS).fill(false), hint:Array(ROOMS).fill(false), solved:false,
-        stars:0, notes:0, freshNote:false, t0:Date.now(), done:false, opts:null, lock:null };
+        stars:0, notes:0, freshNote:false, t0:Date.now(), done:false, opts:null, lock:null,
+        aid:false, aidOffered:false, peek:null };
     setupLock(); show('gameScreen'); renderAll(); window.scrollTo(0,0);
   }
   function show(id){
@@ -452,16 +460,18 @@ const ASSET_DECISIONS = [
   /* ---------- עזרים ---------- */
   const scopeItems=()=> S.room===3 ? S.D.items : S.D.items.filter(x=>!x.late);
   const placedCounts=()=>{ const c=Array(S.D.t).fill(0); for(const r of Object.values(S.place)) c[r]++; return c; };
-  const sortEditable=()=> (S.room===0 || S.room===3) && S.step==='a' && !S.solved;
+  const sortEditable=()=> ((S.room===0 && S.aid) || S.room===3) && S.step==='a' && !S.solved;
+  const counting=()=> S.room===0 && S.step==='a' && !S.solved;
+  const movable=x=> S.room===0 || x.late;
   const allSorted=()=> scopeItems().every(x=>S.place[x.id]!=null);
   const misCols=()=>{ const s=new Set(); scopeItems().forEach(x=>{ const r=S.place[x.id]; if(r!=null && r!==x.t) s.add(r); }); return s; };
 
   /* ---------- מנעול ---------- */
   function setupLock(){
     const D=S.D; S.lock=null;
-    if(S.room===0 && S.step==='b'){
-      S.lock={ title:'מנעול הדלת: הקלידו את השכיחות של כל תוספת, לפי הסדר שעל המנעול',
-        slots:D.lockOrder.map(t=>({label:`${TOPS[t].icon}<span>${TOPS[t].name}</span>`, aria:`שכיחות ${TOPS[t].name}`, t, max:D.maxF, val:''})), active:0 };
+    if(S.room===0 && S.step==='a'){
+      S.lock={ title:'מנעול הדלת: כמה תלמידים ביקשו כל תוספת?', count:true,
+        slots:[...Array(D.t).keys()].map(t=>({label:`${TOPS[t].icon}<span>${TOPS[t].name}</span>`, aria:`שכיחות ${TOPS[t].name}`, t, max:D.maxF, val:''})), active:0 };
     } else if(S.room===2 && S.step==='a'){
       S.lock={ title:'מנעול: הקלידו את סך הכול', slots:[{label:'<span>סך הכול</span>', aria:'סך הכול', max:99, val:''}], active:0 };
     } else if(S.room===3 && S.step==='c'){
@@ -473,6 +483,16 @@ const ASSET_DECISIONS = [
     const L=S.lock; $('lock').hidden=!L || S.solved; if(!L||S.solved) return;
     $('lockTitle').textContent=L.title;
     $('slots').innerHTML=L.slots.map((s,i)=>`<button type="button" class="slot${i===L.active?' active':''}${bad?.has(i)?' bad':''}" data-s="${i}" aria-label="${s.aria}: ${s.val||'ריק'}"><span class="slab">${s.label}</span><span class="sval">${s.val}</span></button>`).join('');
+    syncTyped();
+  }
+  /* בדלת 1 שורת השכיחות בטבלה מציגה את מה שהתלמידים הקלידו */
+  function syncTyped(){
+    if(!counting() || !S.lock?.count) return;
+    $('freqTable').querySelectorAll('td.fq[data-r]').forEach(td=>{
+      const r=+td.dataset.r, s=S.lock.slots[r];
+      td.innerHTML = s.val!=='' ? s.val : '<span class="ph">?</span>';
+      td.classList.toggle('c-active', r===S.lock.active);
+    });
   }
   function keyIn(k){
     const L=S?.lock; if(!L||S.solved||$('lock').hidden) return;
@@ -514,23 +534,26 @@ const ASSET_DECISIONS = [
     const withTotal = S.room>=2;
     const totalVal = S.room>=3 ? pc.reduce((a,b)=>a+b,0) : (S.totalShown ?? '?');
     let h='<tr><th class="rowh" scope="row">תוספת</th>'+cols.map(i=>`<th class="colh ${cc(i)}" data-r="${i}" style="--c:${TOPS[i].c}" scope="col"><button class="colbtn" type="button" data-r="${i}" aria-label="עמודת ${TOPS[i].name}${S.selected!=null?' – הכניסו לכאן':''}">${TOPS[i].icon}<span>${TOPS[i].name}</span></button></th>`).join('')+(withTotal?'<th class="totalc" scope="col">סך הכול</th>':'')+'</tr>';
-    h+='<tr><th class="rowh" scope="row">סימני ספירה</th>'+cols.map(i=>`<td class="tally ${cc(i)}" data-r="${i}">${tallyHTML(pc[i])}</td>`).join('')+(withTotal?'<td class="totalc"></td>':'')+'</tr>';
+    if(!(counting() && !S.aid))
+      h+='<tr><th class="rowh" scope="row">סימני ספירה</th>'+cols.map(i=>`<td class="tally ${cc(i)}" data-r="${i}">${tallyHTML(pc[i])}</td>`).join('')+(withTotal?'<td class="totalc"></td>':'')+'</tr>';
     h+='<tr><th class="rowh" scope="row">שכיחות</th>'+cols.map(i=>`<td class="fq ${cc(i)}" data-r="${i}">${pc[i]}</td>`).join('')+(withTotal?`<td class="fq totalc">${totalVal}</td>`:'')+'</tr>';
     $('freqTable').innerHTML=h;
+    syncTyped();
     if(S.room>=2){ $('classInfo').hidden=false; $('classInfo').innerHTML=`בכיתה <span class="num">${D.N}</span> תלמידים`; } else $('classInfo').hidden=true;
   }
   function flashCol(r){ $('freqTable').querySelectorAll(`[data-r="${r}"]`).forEach(el=>{ if(el.tagName!=='BUTTON') el.classList.add('c-flash'); }); }
 
   function renderNote(showMiss=false){
     const D=S.D, showLate=S.room===3;
-    $('noteCard').hidden = !sortEditable();
+    $('noteCard').hidden = !(sortEditable() || counting());
     const chip=x=>{
       const placed = S.place[x.id]!=null;
-      const locked = placed && !(sortEditable() && (S.room===0 || x.late));
+      const locked = placed && !(sortEditable() && movable(x));
       const cls=['chip']; if(placed) cls.push('placed'); if(locked) cls.push('locked'); if(x.late && !placed) cls.push('new');
       if(showMiss && placed && S.place[x.id]!==x.t) cls.push('miss');
+      if(S.peek!=null && placed && !locked && S.place[x.id]===S.peek) cls.push('peek');
       const tag = placed ? `<span class="tag" style="--c:${TOPS[S.place[x.id]].c}">${TOPS[S.place[x.id]].name}</span>`:'';
-      const lab = placed ? `${x.name}: ${x.msg}. מוין לעמודת ${TOPS[S.place[x.id]].name}${locked?'':'. לחצו כדי להחזיר'}` : `${x.name}: ${x.msg}`;
+      const lab = placed ? `${x.name}: ${x.msg}. מוין לעמודת ${TOPS[S.place[x.id]].name}${locked?'':'. אפשר לגרור לעמודה אחרת, או ללחוץ כדי להעביר או להחזיר'}` : `${x.name}: ${x.msg}`;
       return `<button type="button" class="${cls.join(' ')}" data-id="${x.id}" aria-pressed="${S.selected===x.id}" aria-label="${lab}" ${locked||(!sortEditable()&&!placed)?'disabled':''}><span class="who">${x.name}</span><span class="msg">${x.msg}</span>${tag}</button>`;
     };
     let h='';
@@ -538,10 +561,10 @@ const ASSET_DECISIONS = [
     h+=D.items.filter(x=>!x.late).map(chip).join('');
     $('chips').innerHTML=h;
     const left=scopeItems().filter(x=>S.place[x.id]==null).length;
-    $('leftCount').textContent = left ? `נשארו ${left} הודעות למיון` : 'כל ההודעות מוינו';
+    $('leftCount').textContent = (counting() && !S.aid) ? `${D.n0} הודעות` : left ? `נשארו ${left} הודעות למיון` : 'כל ההודעות מוינו';
     const sel = S.selected!=null && sortEditable() ? D.items.find(x=>x.id===S.selected) : null;
     $('sortBar').classList.toggle('on', !!sel); document.body.classList.toggle('sorting', !!sel);
-    $('sortBar').innerHTML = sel ? `<div class="lbl">לאיזו עמודה? ${sel.name}: ${sel.msg}</div>`+TOPS.slice(0,D.t).map((T,i)=>`<button type="button" data-r="${i}" style="--c:${T.c}">${T.icon}${T.name}</button>`).join('') : '';
+    $('sortBar').innerHTML = sel ? `<div class="lbl">לאיזו עמודה? ${sel.name}: ${sel.msg}</div>`+TOPS.slice(0,D.t).map((T,i)=>`<button type="button" data-r="${i}" style="--c:${T.c}">${T.icon}${T.name}</button>`).join('')+(S.place[sel.id]!=null?'<button type="button" data-back="1" style="--c:#6f7f8f">החזרה לקבוצה</button>':'') : '';
   }
 
   function renderDoors(){
@@ -567,8 +590,8 @@ const ASSET_DECISIONS = [
     let story='', task='', opts=null;
     if(S.room===0){
       story=`<b>מסיבת השכבה מתחילה בעוד שעה!</b> ועד הכיתה איבד את טבלת ההזמנות. נשאר רק צילום מסך מהקבוצה, עם ההודעות של <span class="num">${D.n0}</span> תלמידים.`;
-      task = S.step==='a' ? 'גררו כל הודעה לעמודה המתאימה בטבלה (או לחצו על הודעה ואז על עמודה).'
-                          : 'כל ההודעות מוינו! עכשיו פתחו את מנעול הדלת בעזרת הטבלה.';
+      task = S.aid ? 'גררו כל הודעה לעמודה שלה בטבלה (או לחצו על הודעה ואז על עמודה). טעיתם? גררו את ההודעה לעמודה אחרת. אחר כך ספרו את הקווים ותקנו את המספרים במנעול.'
+                   : 'ספרו בהודעות כמה תלמידים ביקשו כל תוספת, והקלידו במנעול את השכיחות של כל תוספת.';
     } else if(S.room===1){
       story=`ההזמנה נקלטה! מנהל הפיצרייה אומר: „בגלל שהזמנתם כל כך יפה, תקבלו מגש אקסטרה־לארג׳ בחינם עם התוספת הכי פופולרית שלכם!”`;
       task=`מהו <b>השכיח</b> בטבלה?`;
@@ -590,7 +613,7 @@ const ASSET_DECISIONS = [
         opts=S.opts; }
     } else {
       story=`ועד הכיתה שלח תזכורת לקבוצה, ו־<span class="num">${D.k}</span> תלמידים ענו סוף־סוף!`;
-      if(S.step==='a') task=`מיינו את ההודעות החדשות לטבלה.`;
+      if(S.step==='a') task=`מיינו את ההודעות החדשות לטבלה. טעיתם? גררו את ההודעה לעמודה אחרת.`;
       else if(S.step==='b'){ task=`המנהל צריך לדעת איזו תוספת לשים על המגש החינמי. מהו <b>השכיח</b> עכשיו?`;
         if(!S.opts) S.opts=TOPS.slice(0,D.t).map((T,i)=>({key:i,label:T.name,icon:T.icon}));
         opts=S.opts; }
@@ -602,13 +625,14 @@ const ASSET_DECISIONS = [
     $('checkBtn').hidden = !!opts || S.solved;
     $('checkBtn').textContent = S.lock ? 'פתחו את המנעול' : 'בדיקה';
     $('hintBtn').disabled = S.solved;
+    $('aidBtn').hidden = !(counting() && S.aidOffered && !S.aid);
     $('hintBtn').setAttribute('aria-pressed', String(S.hint[S.room]));
   }
 
   function hintText(){
-    if(S.room===0) return S.step==='a'
-      ? 'עברו על ההודעות לפי הסדר. ליד כל הודעה שמוינה כתוב לאיזו עמודה הכנסתם אותה. הודעות שמוינו לעמודה לא נכונה מסומנות עכשיו במסגרת.'
-      : 'על המנעול התוספות מסודרות אחרת מאשר בטבלה. לכל תוספת שעל המנעול, מצאו את העמודה שלה בטבלה והקלידו את השכיחות שלה.';
+    if(S.room===0) return S.aid
+      ? 'ליד כל הודעה שמוינה כתוב לאיזו עמודה הכנסתם אותה. הודעות שמוינו לעמודה לא נכונה מסומנות עכשיו במסגרת. אחרי המיון, ספרו את הקווים בכל עמודה.'
+      : `ספרו תוספת אחת בכל פעם: קודם עברו על כל ההודעות וספרו רק את ה${TOPS[0].name}, אחר כך רק את ה${TOPS[1].name}, וכן הלאה. אפשר גם להיעזר במיון ההודעות לטבלה.`;
     if(S.room===1) return 'השכיח הוא הערך שמופיע הכי הרבה פעמים. מצאו בשורת השכיחות את המספר הגדול ביותר, ובדקו לאיזו תוספת הוא שייך.';
     if(S.room===2) return S.step==='a' ? 'חברו את כל המספרים שבשורת השכיחות.' : 'השוו את סך הכול שבטבלה למספר התלמידים בכיתה. ההפרש הוא מספר התלמידים שחסרים.';
     if(S.step==='a') return 'מיינו רק את ההודעות החדשות. הודעות שמוינו לעמודה לא נכונה מסומנות במסגרת.';
@@ -648,18 +672,31 @@ const ASSET_DECISIONS = [
     const left=scopeItems().filter(x=>S.place[x.id]==null).length;
     if(left){ fb('info', `עוד לא מיינתם את כל ההודעות: נשארו <span class="num">${left}</span>.`); return; }
     const bad=misCols();
-    if(bad.size) return fail('עדיין לא. בדקו:'+list([...bad].map(i=>`בעמודת ${TOPS[i].name} יש הודעה שלא שייכת לה.`)),{bad});
-    if(S.room===0) goStep('b','כל ההודעות מוינו נכון.');
-    else goStep('b',`הטבלה מעודכנת: <span class="num">${S.D.N}</span> בקשות, בדיוק כמספר התלמידים בכיתה.`);
+    if(bad.size) return fail('עדיין לא. בדקו:'+list([...bad].map(i=>`בעמודת ${TOPS[i].name} יש הודעה שלא שייכת לה.`))+'לחצו על העמודה בטבלה כדי לראות אילו הודעות נמצאות בה, וגררו את ההודעה הלא נכונה לעמודה הנכונה.',{bad});
+    goStep('b',`הטבלה מעודכנת: <span class="num">${S.D.N}</span> בקשות, בדיוק כמספר התלמידים בכיתה.`);
   }
   function lockFull(){ if(S.lock.slots.some(s=>s.val==='')){ fb('info','השלימו את כל המקומות במנעול.'); return false; } return true; }
-  function checkDoorLock(){
+  function checkCount(){
     if(!lockFull()) return;
-    const pc=placedCounts(), badSlots=new Set(), lines=[];
-    S.lock.slots.forEach((s,i)=>{ if(+s.val!==pc[s.t]){ badSlots.add(i); lines.push(`המספר של ${TOPS[s.t].name} לא תואם לטבלה.`); } });
-    if(!badSlots.size) return roomSolved('הדלת נפתחה!');
-    renderLock(badSlots);
-    fail('המנעול לא נפתח.'+list(lines));
+    const D=S.D, bad=new Set();
+    S.lock.slots.forEach(s=>{ if(+s.val!==D.f[s.t]) bad.add(s.t); });
+    if(!bad.size){
+      D.items.filter(x=>!x.late).forEach(x=>S.place[x.id]=x.t);   // הטבלה מתמלאת בסימני ספירה
+      S.aid=false; S.selected=null; S.peek=null;
+      return roomSolved('הדלת נפתחה! ספרתם נכון את כל התוספות.');
+    }
+    S.aidOffered=true;
+    const lines=[...bad].map(t=>`השכיחות של ${TOPS[t].name} לא נכונה.`);
+    let extra='';
+    if(S.aid){
+      const mc=misCols();
+      if(mc.size) extra=`בעמודות ${[...mc].map(i=>TOPS[i].name).join(', ')} יש הודעה שלא שייכת להן. לחצו על עמודה כדי לראות את ההודעות שבה, וגררו את ההודעה הלא נכונה לעמודה הנכונה.`;
+      else if(!allSorted()) extra='עוד לא מיינתם את כל ההודעות.';
+      else extra='ספרו שוב את הקווים בכל עמודה.';
+    } else extra='קשה לספור? לחצו על „מיון ההודעות לטבלה”.';
+    S.failed[S.room]=true; renderAll();
+    renderLock(new Set(S.lock.slots.map((s,i)=>bad.has(s.t)?i:-1).filter(i=>i>=0)));
+    fail('המנעול לא נפתח.'+list(lines)+extra, {bad});
   }
   function checkTotal(){
     if(!lockFull()) return;
@@ -676,8 +713,8 @@ const ASSET_DECISIONS = [
   }
   $('checkBtn').addEventListener('click',()=>{
     if(!S || S.solved) return;
-    if((S.room===0||S.room===3) && S.step==='a') return checkSorting();
-    if(S.room===0 && S.step==='b') return checkDoorLock();
+    if(S.room===0 && S.step==='a') return checkCount();
+    if(S.room===3 && S.step==='a') return checkSorting();
     if(S.room===2 && S.step==='a') return checkTotal();
     if(S.room===3 && S.step==='c') return checkExit();
   });
@@ -713,23 +750,27 @@ const ASSET_DECISIONS = [
 
   $('nextBtn').addEventListener('click',()=>{
     if(S.room===ROOMS-1) return finish();
-    S.room++; S.step='a'; S.solved=false; S.opts=null; S.selected=null; setupLock();
+    S.room++; S.step='a'; S.solved=false; S.opts=null; S.selected=null; S.peek=null; setupLock();
     $('nextBtn').hidden=true; fb('','');
     renderAll(); $('gameScreen').scrollIntoView({block:'start'});
   });
-  $('hintBtn').addEventListener('click',()=>{ if(!S||S.solved) return; S.hint[S.room]=true; renderAll(); });
+  $('hintBtn').addEventListener('click',()=>{ if(!S||S.solved) return; S.hint[S.room]=true; if(S.room===0) S.aidOffered=true; renderAll(); });
+  $('aidBtn').addEventListener('click',()=>{
+    if(!S||!counting()) return; S.aid=true; S.aidOffered=true; renderAll();
+    fb('info','גררו כל הודעה לעמודה שלה. בטבלה יופיעו סימני ספירה. אחר כך ספרו את הקווים ותקנו את המספרים במנעול.');
+  });
 
   /* ---------- מיון: לחיצה וגרירה ---------- */
   function place(id, r){
-    S.place[id]=r; S.selected=null; renderTable(); renderNote(S.hint[S.room]); flashCol(r); fb('','');
-    if(allSorted() && S.step==='a') fb('info','כל ההודעות מוינו. לחצו על „בדיקה”.');
+    S.place[id]=r; S.selected=null; S.peek=null; renderTable(); renderNote(S.hint[S.room]); flashCol(r); fb('','');
+    if(allSorted() && S.step==='a') fb('info', S.room===0 ? 'כל ההודעות מוינו. ספרו את הקווים בכל עמודה ותקנו את המספרים במנעול.' : 'כל ההודעות מוינו. לחצו על „בדיקה”.');
   }
   function unplace(id){ delete S.place[id]; renderTable(); renderNote(S.hint[S.room]); }
   const colAt=(x,y)=>document.elementFromPoint(x,y)?.closest('#freqTable [data-r], #sortBar [data-r]');
 
   let drag=null, suppressClick=false;
   $('chips').addEventListener('pointerdown',e=>{
-    const c=e.target.closest('.chip'); if(!c||c.disabled||c.classList.contains('placed')||!sortEditable()) return;
+    const c=e.target.closest('.chip'); if(!c||c.disabled||!sortEditable()) return;
     drag={id:+c.dataset.id, el:c, x0:e.clientX, y0:e.clientY, moved:false, ghost:null, pid:e.pointerId};
     c.setPointerCapture(e.pointerId);
   });
@@ -762,20 +803,33 @@ const ASSET_DECISIONS = [
   $('chips').addEventListener('click',e=>{
     if(suppressClick) return;
     const c=e.target.closest('.chip'); if(!c||c.disabled||!sortEditable()) return;
-    const id=+c.dataset.id;
-    if(S.place[id]!=null){ unplace(id); return; }
-    S.selected = S.selected===id ? null : id;
-    renderNote(S.hint[S.room]); renderTable();
-    if(S.selected!=null) fb('info', matchMedia('(max-width:900px)').matches ? 'עכשיו בחרו את העמודה בסרגל שלמטה.' : 'עכשיו לחצו על העמודה המתאימה בטבלה.');
-    else fb('','');
+    const id=+c.dataset.id, placed=S.place[id]!=null, narrow=matchMedia('(max-width:900px)').matches;
+    S.peek=null;
+    if(S.selected===id){
+      S.selected=null;
+      if(placed){ unplace(id); fb('info','ההודעה חזרה לקבוצה.'); }
+      else { renderNote(S.hint[S.room]); renderTable(); fb('',''); }
+      return;
+    }
+    S.selected=id; renderNote(S.hint[S.room]); renderTable();
+    if(placed) fb('info', narrow ? 'בחרו בסרגל שלמטה עמודה אחרת, או „החזרה לקבוצה”.' : 'לחצו על העמודה הנכונה בטבלה כדי להעביר את ההודעה, או לחצו שוב על ההודעה כדי להחזיר אותה לקבוצה.');
+    else fb('info', narrow ? 'עכשיו בחרו את העמודה בסרגל שלמטה.' : 'עכשיו לחצו על העמודה המתאימה בטבלה.');
   });
   $('freqTable').addEventListener('click',e=>{
     const c=e.target.closest('[data-r]'); if(!c) return;
-    if(S.selected!=null && sortEditable()) place(S.selected,+c.dataset.r);
-    else if(sortEditable()) fb('info','קודם בחרו הודעה מהקבוצה, ואז לחצו על העמודה.');
+    const r=+c.dataset.r;
+    if(S.selected!=null && sortEditable()) return place(S.selected,r);
+    if(counting() && S.lock){ S.lock.active=r; renderLock(); }
+    if(!sortEditable()) return;
+    S.peek = S.peek===r ? null : r; renderNote(S.hint[S.room]);
+    if(S.peek==null) return fb('','');
+    const n=scopeItems().filter(x=>movable(x) && S.place[x.id]===r).length;
+    fb('info', n ? `ההודעות שבעמודת ${TOPS[r].name} מסומנות בירוק. הודעה שלא שייכת לכאן – גררו אותה לעמודה הנכונה.`
+                 : `בעמודת ${TOPS[r].name} עוד אין הודעות. גררו לכאן הודעה, או לחצו על הודעה ואז על העמודה.`);
   });
   $('sortBar').addEventListener('click',e=>{
-    const b=e.target.closest('button[data-r]'); if(!b||S.selected==null) return;
+    const b=e.target.closest('button[data-r], button[data-back]'); if(!b||S.selected==null) return;
+    if(b.dataset.back){ const id=S.selected; S.selected=null; unplace(id); fb('info','ההודעה חזרה לקבוצה.'); return; }
     place(S.selected,+b.dataset.r);
   });
 
